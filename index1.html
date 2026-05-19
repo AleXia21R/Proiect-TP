@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <title>Guess The Drawing</title>
+  <link rel="stylesheet" href="style1.css">
+</head>
+<body>
+
+<div id="startScreen" class="screen">
+  <h1>GUESS THE DRAWING</h1>
+  <button onclick="startGame()">START</button>
+</div>
+
+<div id="drawScreen" class="screen hidden">
+  <h1>Deseneaza</h1>
+
+  <canvas id="canvas" width="900" height="550"></canvas>
+
+  <div class="tools">
+    <button onclick="changeBrush(-2)">-</button>
+    <span id="brushText">8</span>
+    <button onclick="changeBrush(2)">+</button>
+    <button onclick="clearCanvas()">Sterge</button>
+  </div>
+</div>
+
+<script>
+  var Module = {
+    onRuntimeInitialized: function () {
+      window.cReady = true;
+    }
+  };
+</script>
+
+<script src="logic1.js"></script>
+<script src="script1.js"></script>
+</body>
+</html>
