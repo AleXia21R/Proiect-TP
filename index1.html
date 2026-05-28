@@ -9,11 +9,43 @@
 
 <div id="startScreen" class="screen">
   <h1>GUESS THE DRAWING</h1>
-  <button onclick="startGame()">START</button>
+  <button onclick="goToSetup()">START</button>
+</div>
+
+<div id="setupScreen" class="screen hidden">
+  <h1>Setari joc</h1>
+
+  <p>Jucatori: <span id="playersText">1</span></p>
+  <button onclick="changePlayers(-1)">-</button>
+  <button onclick="changePlayers(1)">+</button>
+
+  <p>Runde: <span id="roundsText">3</span></p>
+  <button onclick="changeRounds(-1)">-</button>
+  <button onclick="changeRounds(1)">+</button>
+
+  <p>Timp desen:</p>
+  <button onclick="setDrawTime(20)">20s</button>
+  <button onclick="setDrawTime(30)">30s</button>
+  <button onclick="setDrawTime(45)">45s</button>
+  <button onclick="setDrawTime(60)">60s</button>
+  <p id="timeText">60s</p>
+
+  <button onclick="goToNames()">CONTINUA</button>
+</div>
+
+<div id="namesScreen" class="screen hidden">
+  <h1>Numele jucatorilor</h1>
+  <div id="namesContainer"></div>
+  <button onclick="startGame()">INCEPE</button>
 </div>
 
 <div id="drawScreen" class="screen hidden">
   <h1>Deseneaza</h1>
+
+  <div class="topInfo">
+    <p>Runda: <span id="roundInfo">1 / 3</span></p>
+    <p>Timp: <span id="timerText">60</span></p>
+  </div>
 
   <canvas id="canvas" width="900" height="550"></canvas>
 
@@ -23,6 +55,8 @@
     <button onclick="changeBrush(2)">+</button>
     <button onclick="clearCanvas()">Sterge</button>
   </div>
+
+  <div id="playersList"></div>
 </div>
 
 <script>
@@ -33,7 +67,9 @@
   };
 </script>
 
+<!-- Acestea vor functiona doar daca ai logic1.js si logic1.wasm generate -->
 <script src="logic1.js"></script>
+
 <script src="script1.js"></script>
 </body>
 </html>
