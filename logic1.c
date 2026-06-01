@@ -1,54 +1,62 @@
-int players = 1;
-int rounds = 3;
-int drawTime = 60;
-int brushSize = 8;
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 
-void set_game_config(int p, int r, int t) {
-    if (p < 1) p = 1;
-    if (p > 6) p = 6;
+#define MAX_PLAYERS 6
+#define MAX_WORDS 30
 
-    if (r < 3) r = 3;
-    if (r > 8) r = 8;
+int scores[MAX_PLAYERS];
 
-    if (t != 20 && t != 30 && t != 45 && t != 60) {
-        t = 60;
+char words[MAX_WORDS][30] = {
+    "pisica", "caine", "dragon", "robot", "pizza",
+    "masina", "castel", "fantoma", "telefon", "astronaut",
+    "broasca", "avion", "copac", "soare", "luna",
+    "munte", "peste", "coroana", "sarpe", "calculator",
+    "floare", "minge", "tren", "carte", "vulcan",
+    "urs", "iepure", "ochelari", "microfon", "racheta"
+};
+
+void reset_scores() {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        scores[i] = 0;
+    }
+}
+
+void add_score(int player, int points) {
+    if (player >= 0 && player < MAX_PLAYERS) {
+        scores[player] += points;
+    }
+}
+
+int get_score(int player) {
+    if (player >= 0 && player < MAX_PLAYERS) {
+        return scores[player];
     }
 
-    players = p;
-    rounds = r;
-    drawTime = t;
+    return 0;
 }
 
-int get_players() {
-    return players;
+void normalize_text(char text[]) {
+    for (int i = 0; text[i] != '\0'; i++) {
+        text[i] = tolower(text[i]);
+    }
 }
 
-int get_rounds() {
-    return rounds;
+int check_guess(char guess[], char answer[]) {
+    normalize_text(guess);
+    normalize_text(answer);
+
+    if (strcmp(guess, answer) == 0) {
+        return 1;
+    }
+
+    return 0;
 }
 
-int get_draw_time() {
-    return drawTime;
-}
+void print_words() {
+    printf("Lista cuvinte:\n");
 
-void set_brush_size(int size) {
-    if (size < 2) size = 2;
-    if (size > 40) size = 40;
-
-    brushSize = size;
-}
-
-void change_brush_size(int value) {
-    brushSize += value;
-
-    if (brushSize < 2) brushSize = 2;
-    if (brushSize > 40) brushSize = 40;
-}
-
-int get_brush_size() {
-    return brushSize;
-}
-
-int should_clear_canvas() {
-    return 1;
+    for (int i = 0; i < MAX_WORDS; i++) {
+        printf("%s\n", words[i]);
+    }
 }
