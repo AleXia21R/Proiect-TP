@@ -2,10 +2,11 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #edf0f7;
-  text-align: center;
+  color: #222;
 }
 
 .screen {
+  text-align: center;
   padding: 40px;
 }
 
@@ -23,10 +24,10 @@ button {
   color: white;
   border: none;
   border-radius: 12px;
-  padding: 14px 28px;
-  font-size: 20px;
+  padding: 12px 22px;
+  margin: 7px;
+  font-size: 18px;
   cursor: pointer;
-  margin: 10px;
 }
 
 button:hover {
@@ -35,13 +36,85 @@ button:hover {
 
 input {
   padding: 12px;
-  font-size: 20px;
+  font-size: 18px;
   border-radius: 10px;
   border: 3px solid #4b35c8;
-  margin: 10px;
+}
+
+.topBar {
+  height: 85px;
+  background: white;
+  border-bottom: 4px solid #4b35c8;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+#timerText {
+  font-size: 42px;
+  color: #4b35c8;
+}
+
+.mainLayout {
+  display: grid;
+  grid-template-columns: 260px 1fr 360px;
+  gap: 20px;
+  padding: 20px;
+}
+
+.playersPanel,
+.chatPanel {
+  background: white;
+  border-radius: 18px;
+  border: 4px solid #4b35c8;
+  padding: 18px;
+  height: 760px;
+}
+
+.playersPanel h2,
+.chatPanel h2 {
+  text-align: center;
+  color: #4b35c8;
+}
+
+#roundText {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #4b35c8;
+  background: #ece8ff;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+.playerItem {
+  background: #ece8ff;
+  padding: 14px;
+  margin: 12px 0;
+  border-radius: 12px;
+  font-size: 20px;
+}
+
+.playerItem.active {
+  background: #4b35c8;
+  color: white;
+}
+
+.centerArea {
+  text-align: center;
+}
+
+#drawerText {
+  margin: 5px;
+  color: #333;
+  font-size: 28px;
 }
 
 canvas {
+  width: 100%;
+  max-width: 1050px;
+  height: 650px;
   background: white;
   border: 5px solid #4b35c8;
   border-radius: 14px;
@@ -49,29 +122,83 @@ canvas {
 }
 
 .tools {
-  margin-top: 20px;
-  font-size: 22px;
-}
-
-.topInfo {
+  background: white;
+  border: 4px solid #4b35c8;
+  border-radius: 16px;
+  margin-top: 12px;
+  padding: 14px;
   display: flex;
   justify-content: center;
-  gap: 60px;
-  font-size: 24px;
-  color: #4b35c8;
+  align-items: center;
+  gap: 12px;
+}
+
+.palette {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 620px;
+}
+
+.colorBox {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 3px solid #777;
+  cursor: pointer;
+}
+
+.colorBox.selected {
+  border: 4px solid black;
+}
+
+#chatMessages {
+  height: 625px;
+  overflow-y: auto;
+  background: #f5f3ff;
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
+}
+
+.chatMessage {
+  background: white;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.chatMessage.correct {
+  background: #d7ffd7;
+  color: #166b16;
   font-weight: bold;
 }
 
-#playersList {
-  margin-top: 25px;
+.guessBox {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
 }
 
-.playerItem {
-  display: inline-block;
-  background: white;
-  border: 3px solid #4b35c8;
-  border-radius: 12px;
-  padding: 12px 18px;
-  margin: 8px;
-  font-size: 18px;
+.guessBox input {
+  width: 200px;
+}
+
+.nameInput {
+  display: block;
+  margin: 14px auto;
+  width: 280px;
+}
+
+#wordChoices {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  margin-top: 60px;
+}
+
+.wordButton {
+  font-size: 24px;
+  padding: 25px 45px;
 }
