@@ -9,35 +9,36 @@
 
 <div id="startScreen" class="screen">
   <h1>GUESS THE DRAWING</h1>
-  <button onclick="goToSetup()">START</button>
+  <input id="playerNameInput" placeholder="Numele tau">
+  <br>
+  <button onclick="joinGame()">JOIN GAME</button>
 </div>
 
-<div id="setupScreen" class="screen hidden">
-  <h1>Setari joc</h1>
+<div id="lobbyScreen" class="screen hidden">
+  <h1>Lobby</h1>
+  <p id="hostInfo"></p>
 
-  <p>Jucatori: <span id="playersText">2</span></p>
-  <button onclick="changePlayers(-1)">-</button>
-  <button onclick="changePlayers(1)">+</button>
+  <div id="lobbyPlayers"></div>
 
-  <p>Runde: <span id="roundsText">3</span></p>
-  <button onclick="changeRounds(-1)">-</button>
-  <button onclick="changeRounds(1)">+</button>
+  <div id="hostSettings" class="hidden">
+    <h2>Setari joc</h2>
 
-  <p>Timp desen:</p>
-  <button onclick="setDrawTime(20)">20s</button>
-  <button onclick="setDrawTime(30)">30s</button>
-  <button onclick="setDrawTime(45)">45s</button>
-  <button onclick="setDrawTime(60)">60s</button>
+    <p>Runde: <span id="roundsText">3</span></p>
+    <button onclick="changeRounds(-1)">-</button>
+    <button onclick="changeRounds(1)">+</button>
 
-  <p id="timeText">60s</p>
+    <p>Timp desen:</p>
+    <button onclick="setDrawTime(20)">20s</button>
+    <button onclick="setDrawTime(30)">30s</button>
+    <button onclick="setDrawTime(45)">45s</button>
+    <button onclick="setDrawTime(60)">60s</button>
 
-  <button onclick="goToNames()">CONTINUA</button>
-</div>
+    <p id="timeText">60s</p>
 
-<div id="namesScreen" class="screen hidden">
-  <h1>Numele jucatorilor</h1>
-  <div id="namesContainer"></div>
-  <button onclick="confirmNames()">INCEPE</button>
+    <button onclick="hostStartGame()">INCEPE JOCUL</button>
+  </div>
+
+  <p id="waitingText">Asteapta ca hostul sa porneasca jocul...</p>
 </div>
 
 <div id="wordChoiceScreen" class="screen hidden">
@@ -78,6 +79,7 @@
 
     <div class="chatPanel">
       <h2>Chat</h2>
+
       <div id="chatMessages"></div>
 
       <div class="guessBox">
@@ -94,6 +96,8 @@
   <button onclick="location.reload()">Joaca din nou</button>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 <script src="script1.js"></script>
+
 </body>
 </html>
