@@ -185,12 +185,6 @@ canvas {
   width: 200px;
 }
 
-.nameInput {
-  display: block;
-  margin: 14px auto;
-  width: 280px;
-}
-
 #wordChoices {
   display: flex;
   justify-content: center;
