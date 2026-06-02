@@ -1,3 +1,5 @@
+const socket = io();
+
 const words = [
   "pisica", "caine", "dragon", "robot", "pizza",
   "masina", "castel", "fantoma", "telefon", "astronaut",
@@ -7,15 +9,16 @@ const words = [
   "urs", "iepure", "ochelari", "microfon", "racheta"
 ];
 
-let players = 2;
+let allPlayers = [];
+let hostId = null;
+let myName = "";
+let myId = "";
+
 let rounds = 3;
 let drawTime = 60;
 
-let playerNames = [];
-let scores = [];
-
 let currentRound = 1;
-let currentDrawer = 0;
+let currentDrawerIndex = 0;
 let currentWord = "";
 
 let timer = drawTime;
@@ -28,6 +31,8 @@ let drawing = false;
 let lastX = 0;
 let lastY = 0;
 
+let hasGuessedCorrectly = false;
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -37,6 +42,10 @@ const colors = [
   "lime", "green", "darkgreen", "blue", "darkblue",
   "purple", "violet", "pink", "magenta", "white", "beige"
 ];
+
+socket.on("connect", () => {
+  myId = socket.id;
+});
 
 function normalize(text) {
   return text
@@ -53,20 +62,68 @@ function showScreen(id) {
   document.getElementById(id).classList.remove("hidden");
 }
 
-function goToSetup() {
-  showScreen("setupScreen");
+function isHost() {
+  return myId === hostId;
 }
 
-function changePlayers(value) {
-  players += value;
+function isDrawer() {
+  return allPlayers[currentDrawerIndex] &&
+         allPlayers[currentDrawerIndex].id === myId;
+}
 
-  if (players < 2) players = 2;
-  if (players > 6) players = 6;
+function joinGame() {
+  myName = document.getElementById("playerNameInput").value.trim();
 
-  document.getElementById("playersText").textContent = players;
+  if (myName === "") {
+    myName = "Player";
+  }
+
+  socket.emit("joinGame", myName);
+  showScreen("lobbyScreen");
+}
+
+socket.on("roomFull", () => {
+  alert("Camera este plina. Maxim 8 jucatori.");
+});
+
+socket.on("playersUpdate", data => {
+  allPlayers = data.players;
+  hostId = data.hostId;
+
+  updateLobby();
+  updatePlayersPanel();
+});
+
+function updateLobby() {
+  const lobby = document.getElementById("lobbyPlayers");
+  if (!lobby) return;
+
+  lobby.innerHTML = "";
+
+  allPlayers.forEach(player => {
+    const div = document.createElement("div");
+    div.className = "playerItem";
+    div.innerHTML = `<b>${player.name}</b><br>Scor: ${player.score}`;
+    lobby.appendChild(div);
+  });
+
+  const host = allPlayers.find(player => player.id === hostId);
+
+  document.getElementById("hostInfo").textContent =
+    host ? `Host: ${host.name}` : "Host: -";
+
+  if (isHost()) {
+    document.getElementById("hostSettings").classList.remove("hidden");
+    document.getElementById("waitingText").classList.add("hidden");
+  } else {
+    document.getElementById("hostSettings").classList.add("hidden");
+    document.getElementById("waitingText").classList.remove("hidden");
+  }
 }
 
 function changeRounds(value) {
+  if (!isHost()) return;
+
   rounds += value;
 
   if (rounds < 3) rounds = 3;
@@ -76,43 +133,36 @@ function changeRounds(value) {
 }
 
 function setDrawTime(value) {
+  if (!isHost()) return;
+
   drawTime = value;
   document.getElementById("timeText").textContent = `${value}s`;
 }
 
-function goToNames() {
-  showScreen("namesScreen");
+function hostStartGame() {
+  if (!isHost()) return;
 
-  const container = document.getElementById("namesContainer");
-  container.innerHTML = "";
-
-  for (let i = 0; i < players; i++) {
-    const input = document.createElement("input");
-    input.className = "nameInput";
-    input.placeholder = `Jucator ${i + 1}`;
-
-    container.appendChild(input);
+  if (allPlayers.length < 2) {
+    alert("Ai nevoie de cel putin 2 jucatori.");
+    return;
   }
+
+  socket.emit("startGame", {
+    rounds,
+    drawTime
+  });
 }
 
-function confirmNames() {
-  const inputs = document.querySelectorAll(".nameInput");
-
-  playerNames = [];
-  scores = [];
-
-  inputs.forEach((input, index) => {
-    const name = input.value.trim() || `Jucator ${index + 1}`;
-
-    playerNames.push(name);
-    scores.push(0);
-  });
-
-  currentRound = 1;
-  currentDrawer = 0;
+socket.on("gameStarted", settings => {
+  allPlayers = settings.players;
+  hostId = settings.hostId;
+  rounds = settings.rounds;
+  drawTime = settings.drawTime;
+  currentRound = settings.currentRound;
+  currentDrawerIndex = settings.currentDrawerIndex;
 
   goToWordChoice();
-}
+});
 
 function getRandomWords(count) {
   const shuffled = [...words].sort(() => Math.random() - 0.5);
@@ -121,40 +171,68 @@ function getRandomWords(count) {
 
 function goToWordChoice() {
   clearInterval(timerInterval);
+  hasGuessedCorrectly = false;
 
   showScreen("wordChoiceScreen");
 
-  document.getElementById("drawerChoiceText").textContent =
-    `${playerNames[currentDrawer]} deseneaza. Alege un cuvant:`;
+  const drawer = allPlayers[currentDrawerIndex];
 
-  const choices = getRandomWords(3);
+  if (!drawer) return;
 
-  const container = document.getElementById("wordChoices");
-  container.innerHTML = "";
+  if (isDrawer()) {
+    document.getElementById("drawerChoiceText").textContent =
+      `${myName}, alege un cuvant:`;
 
-  choices.forEach(word => {
-    const btn = document.createElement("button");
+    const choices = getRandomWords(3);
+    const container = document.getElementById("wordChoices");
+    container.innerHTML = "";
 
-    btn.className = "wordButton";
-    btn.textContent = word;
-    btn.onclick = () => startRound(word);
+    choices.forEach(word => {
+      const btn = document.createElement("button");
+      btn.className = "wordButton";
+      btn.textContent = word;
 
-    container.appendChild(btn);
-  });
+      btn.onclick = () => {
+        socket.emit("chooseWord", word);
+      };
+
+      container.appendChild(btn);
+    });
+  } else {
+    document.getElementById("drawerChoiceText").textContent =
+      `Asteapta ca ${drawer.name} sa aleaga un cuvant...`;
+
+    document.getElementById("wordChoices").innerHTML = "";
+  }
 }
 
-function startRound(word) {
-  currentWord = word;
+socket.on("wordChosen", data => {
+  currentWord = data.word;
+  currentRound = data.currentRound;
+  currentDrawerIndex = data.currentDrawerIndex;
 
+  startRound();
+});
+
+function startRound() {
   showScreen("gameScreen");
 
-  clearCanvas();
+  hasGuessedCorrectly = false;
+
+  clearCanvasLocal();
   createPalette();
   updatePlayersPanel();
   clearChat();
 
-  document.getElementById("drawerText").textContent =
-    `${playerNames[currentDrawer]} deseneaza`;
+  const drawer = allPlayers[currentDrawerIndex];
+
+  if (isDrawer()) {
+    document.getElementById("drawerText").textContent =
+      `Tu desenezi: ${currentWord}`;
+  } else {
+    document.getElementById("drawerText").textContent =
+      `${drawer.name} deseneaza`;
+  }
 
   timer = drawTime;
 
@@ -173,34 +251,43 @@ function startRound(word) {
     }
 
     if (timer <= 0) {
-      endRound();
+      if (isDrawer()) {
+        socket.emit("timeEnded");
+      }
+
+      clearInterval(timerInterval);
     }
   }, 1000);
 }
 
 function updatePlayersPanel() {
   const list = document.getElementById("playersList");
+
+  if (!list) return;
+
   list.innerHTML = "";
 
-  for (let i = 0; i < players; i++) {
+  allPlayers.forEach((player, index) => {
     const item = document.createElement("div");
-
     item.className = "playerItem";
 
-    if (i === currentDrawer) {
+    if (index === currentDrawerIndex) {
       item.classList.add("active");
     }
 
     item.innerHTML = `
-      <b>${playerNames[i]}</b><br>
-      Scor: ${scores[i]}
+      <b>${player.name}</b><br>
+      Scor: ${player.score}
     `;
 
     list.appendChild(item);
-  }
+  });
 
-  document.getElementById("roundText").textContent =
-    `Runda ${currentRound} / ${rounds}`;
+  const roundText = document.getElementById("roundText");
+
+  if (roundText) {
+    roundText.textContent = `Runda ${currentRound} / ${rounds}`;
+  }
 }
 
 function createPalette() {
@@ -218,6 +305,8 @@ function createPalette() {
     }
 
     box.onclick = () => {
+      if (!isDrawer()) return;
+
       brushColor = color;
 
       document.querySelectorAll(".colorBox").forEach(b => {
@@ -234,12 +323,30 @@ function createPalette() {
 }
 
 function selectEraser() {
+  if (!isDrawer()) return;
+
   brushColor = "white";
 
   document.querySelectorAll(".colorBox").forEach(b => {
     b.classList.remove("selected");
   });
 }
+
+function clearCanvas() {
+  if (!isDrawer()) return;
+
+  clearCanvasLocal();
+  socket.emit("clearCanvas");
+}
+
+function clearCanvasLocal() {
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+socket.on("clearCanvas", () => {
+  clearCanvasLocal();
+});
 
 function clearChat() {
   document.getElementById("chatMessages").innerHTML = "";
@@ -258,61 +365,62 @@ function addChatMessage(text, correct = false) {
 }
 
 function sendGuess() {
+  if (isDrawer()) return;
+  if (hasGuessedCorrectly) return;
+
   const input = document.getElementById("guessInput");
   const guess = input.value.trim();
 
   if (guess === "") return;
 
-  const guessingPlayer = getNextGuessingPlayer();
-
   if (normalize(guess) === normalize(currentWord)) {
-    scores[guessingPlayer] += 100;
-    scores[currentDrawer] += 50;
+    hasGuessedCorrectly = true;
 
-    addChatMessage(`${playerNames[guessingPlayer]} a ghicit corect!`, true);
-    updatePlayersPanel();
+    socket.emit("correctGuess", {
+      guesserName: myName
+    });
 
     input.value = "";
-    endRound();
-
     return;
   }
 
-  addChatMessage(`${playerNames[guessingPlayer]}: ${guess}`);
+  socket.emit("guess", {
+    name: myName,
+    text: guess
+  });
+
   input.value = "";
 }
 
-function getNextGuessingPlayer() {
-  for (let i = 0; i < players; i++) {
-    if (i !== currentDrawer) {
-      return i;
-    }
-  }
+socket.on("guess", data => {
+  addChatMessage(`${data.name}: ${data.text}`);
+});
 
-  return currentDrawer;
-}
+socket.on("correctGuess", data => {
+  addChatMessage(
+    `${data.guesserName} a ghicit corect! +${data.points} puncte`,
+    true
+  );
+});
 
-function endRound() {
+socket.on("roundEnded", data => {
   clearInterval(timerInterval);
   drawing = false;
 
-  addChatMessage(`Runda s-a terminat! Cuvantul era: ${currentWord}`, true);
+  addChatMessage(`Runda s-a terminat! Cuvantul era: ${data.word}`, true);
+});
 
-  setTimeout(() => {
-    currentDrawer++;
+socket.on("nextRound", data => {
+  currentRound = data.currentRound;
+  currentDrawerIndex = data.currentDrawerIndex;
 
-    if (currentDrawer >= players) {
-      currentDrawer = 0;
-      currentRound++;
-    }
+  goToWordChoice();
+});
 
-    if (currentRound > rounds) {
-      showFinalScores();
-    } else {
-      goToWordChoice();
-    }
-  }, 1800);
-}
+socket.on("gameFinished", players => {
+  allPlayers = players;
+  showFinalScores();
+});
 
 function showFinalScores() {
   showScreen("finalScreen");
@@ -320,16 +428,16 @@ function showFinalScores() {
   const final = document.getElementById("finalScores");
   final.innerHTML = "";
 
-  for (let i = 0; i < players; i++) {
+  allPlayers.forEach(player => {
     const p = document.createElement("h2");
-
-    p.textContent = `${playerNames[i]}: ${scores[i]} puncte`;
-
+    p.textContent = `${player.name}: ${player.score} puncte`;
     final.appendChild(p);
-  }
+  });
 }
 
 canvas.addEventListener("mousedown", event => {
+  if (!isDrawer()) return;
+
   drawing = true;
 
   const rect = canvas.getBoundingClientRect();
@@ -347,37 +455,51 @@ canvas.addEventListener("mouseleave", () => {
 });
 
 canvas.addEventListener("mousemove", event => {
-  if (!drawing) return;
+  if (!drawing || !isDrawer()) return;
 
   const rect = canvas.getBoundingClientRect();
 
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
 
-  ctx.strokeStyle = brushColor;
-  ctx.lineWidth = brushSize;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  drawLine(lastX, lastY, x, y, brushColor, brushSize);
 
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(x, y);
-  ctx.stroke();
+  socket.emit("draw", {
+    x1: lastX,
+    y1: lastY,
+    x2: x,
+    y2: y,
+    color: brushColor,
+    size: brushSize
+  });
 
   lastX = x;
   lastY = y;
 });
 
+function drawLine(x1, y1, x2, y2, color, size) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = size;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+socket.on("draw", data => {
+  drawLine(data.x1, data.y1, data.x2, data.y2, data.color, data.size);
+});
+
 function changeBrush(value) {
+  if (!isDrawer()) return;
+
   brushSize += value;
 
   if (brushSize < 2) brushSize = 2;
   if (brushSize > 40) brushSize = 40;
 
   document.getElementById("brushText").textContent = brushSize;
-}
-
-function clearCanvas() {
-  ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
