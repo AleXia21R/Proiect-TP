@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const { execFileSync } = require("child_process");
 
 const app = express();
 const server = http.createServer(app);
@@ -13,12 +14,115 @@ let hostId = null;
 
 let rounds = 3;
 let drawTime = 60;
+
 let currentRound = 1;
 let currentDrawerIndex = 0;
 let currentWord = "";
+
 let guessedPlayers = [];
 let roundActive = false;
 let roundEnded = false;
+let currentTimeLeft = 0;
+
+function runC(args) {
+  try {
+    return execFileSync("./logic1", args, {
+      encoding: "utf8"
+    }).trim();
+  } catch (error) {
+    console.log("Eroare la apelarea C:", error.message);
+    return "";
+  }
+}
+
+function getWordsFromC() {
+  const seed = Date.now() + currentRound + currentDrawerIndex;
+  const result = runC(["words", String(seed)]);
+
+  if (!result) {
+    return ["pisica", "robot", "telefon"];
+  }
+
+  return result.split(",");
+}
+
+function checkGuessWithC(guess, answer) {
+  return runC(["check", guess, answer]) === "1";
+}
+
+function calculatePointsWithC(position, timeLeft) {
+  const result = runC(["points", String(position), String(timeLeft)]);
+  const points = Number(result);
+
+  if (isNaN(points)) return 20;
+
+  return points;
+}
+
+function drawerBonusWithC() {
+  const result = runC(["bonus"]);
+  const bonus = Number(result);
+
+  if (isNaN(bonus)) return 30;
+
+  return bonus;
+}
+
+function getNextDrawerFromC() {
+  const result = runC([
+    "nextdrawer",
+    String(currentDrawerIndex),
+    String(players.length)
+  ]);
+
+  const next = Number(result);
+
+  if (isNaN(next)) {
+    return (currentDrawerIndex + 1) % players.length;
+  }
+
+  return next;
+}
+
+function shouldEndRoundWithC() {
+  return runC([
+    "endround",
+    String(guessedPlayers.length),
+    String(players.length)
+  ]) === "1";
+}
+
+function sortPlayersWithC() {
+  const input = players
+    .map(player => `${player.name}:${player.score}`)
+    .join(",");
+
+  const result = runC(["sort", input]);
+
+  if (!result) return players;
+
+  const sorted = result.split(",").map(item => {
+    const [name, score] = item.split(":");
+
+    const originalPlayer = players.find(player => player.name === name);
+
+    return {
+      id: originalPlayer ? originalPlayer.id : "",
+      name,
+      score: Number(score)
+    };
+  });
+
+  return sorted;
+}
+
+function saveScoresWithC() {
+  const input = players
+    .map(player => `${player.name}:${player.score}`)
+    .join(",");
+
+  runC(["save", input]);
+}
 
 function getDrawer() {
   return players[currentDrawerIndex];
@@ -27,9 +131,11 @@ function getDrawer() {
 function resetGame() {
   currentRound = 1;
   currentDrawerIndex = 0;
+  currentWord = "";
   guessedPlayers = [];
   roundActive = false;
   roundEnded = false;
+  currentTimeLeft = drawTime;
 
   players = players.map(player => {
     player.score = 0;
@@ -37,20 +143,49 @@ function resetGame() {
   });
 }
 
-function nextRound() {
-  currentDrawerIndex++;
+function sendWordsToDrawer() {
+  const drawer = getDrawer();
 
-  if (currentDrawerIndex >= players.length) {
-    currentDrawerIndex = 0;
+  if (!drawer) return;
+
+  const choices = getWordsFromC();
+
+  console.log("Cuvinte generate de C:", choices);
+
+  io.emit("waitingForWord", {
+    drawerName: drawer.name,
+    currentRound,
+    currentDrawerIndex
+  });
+
+  io.to(drawer.id).emit("chooseWords", {
+    choices
+  });
+}
+
+function advanceRound() {
+  if (players.length === 0) return;
+
+  const oldDrawer = currentDrawerIndex;
+
+  currentDrawerIndex = getNextDrawerFromC();
+
+  if (currentDrawerIndex <= oldDrawer) {
     currentRound++;
   }
 
+  currentWord = "";
   guessedPlayers = [];
   roundActive = false;
   roundEnded = false;
-  currentWord = "";
+  currentTimeLeft = drawTime;
 
   if (currentRound > rounds) {
+    const sortedPlayers = sortPlayersWithC();
+    players = sortedPlayers;
+
+    saveScoresWithC();
+
     io.emit("gameFinished", players);
   } else {
     io.emit("nextRound", {
@@ -58,6 +193,10 @@ function nextRound() {
       currentDrawerIndex,
       players
     });
+
+    setTimeout(() => {
+      sendWordsToDrawer();
+    }, 500);
   }
 }
 
@@ -95,8 +234,14 @@ io.on("connection", socket => {
 
     rounds = settings.rounds;
     drawTime = settings.drawTime;
+    currentTimeLeft = drawTime;
 
     resetGame();
+
+    io.emit("playersUpdate", {
+      players,
+      hostId
+    });
 
     io.emit("gameStarted", {
       players,
@@ -106,6 +251,10 @@ io.on("connection", socket => {
       currentRound,
       currentDrawerIndex
     });
+
+    setTimeout(() => {
+      sendWordsToDrawer();
+    }, 500);
   });
 
   socket.on("chooseWord", word => {
@@ -117,16 +266,29 @@ io.on("connection", socket => {
     guessedPlayers = [];
     roundActive = true;
     roundEnded = false;
+    currentTimeLeft = drawTime;
+
+    socket.emit("drawerWord", {
+      word: currentWord
+    });
 
     io.emit("wordChosen", {
-      word,
       currentRound,
       currentDrawerIndex
     });
   });
 
+  socket.on("timerUpdate", timeLeft => {
+    const drawer = getDrawer();
+
+    if (!drawer || socket.id !== drawer.id) return;
+
+    currentTimeLeft = timeLeft;
+  });
+
   socket.on("draw", data => {
     const drawer = getDrawer();
+
     if (!drawer || socket.id !== drawer.id) return;
 
     socket.broadcast.emit("draw", data);
@@ -134,31 +296,37 @@ io.on("connection", socket => {
 
   socket.on("clearCanvas", () => {
     const drawer = getDrawer();
+
     if (!drawer || socket.id !== drawer.id) return;
 
     io.emit("clearCanvas");
   });
 
   socket.on("guess", data => {
-    io.emit("guess", data);
-  });
-
-  socket.on("correctGuess", data => {
     if (!roundActive || roundEnded) return;
 
     const drawer = getDrawer();
+
     if (!drawer) return;
-
     if (socket.id === drawer.id) return;
-
     if (guessedPlayers.includes(socket.id)) return;
+
+    const correct = checkGuessWithC(data.text, currentWord);
+
+    if (!correct) {
+      io.emit("guess", {
+        name: data.name,
+        text: data.text
+      });
+
+      return;
+    }
 
     guessedPlayers.push(socket.id);
 
     const position = guessedPlayers.length;
-
-    let points = 100 - (position - 1) * 20;
-    if (points < 20) points = 20;
+    const points = calculatePointsWithC(position, currentTimeLeft);
+    const drawerBonus = drawerBonusWithC();
 
     players = players.map(player => {
       if (player.id === socket.id) {
@@ -166,7 +334,7 @@ io.on("connection", socket => {
       }
 
       if (player.id === drawer.id) {
-        player.score += 30;
+        player.score += drawerBonus;
       }
 
       return player;
@@ -179,13 +347,11 @@ io.on("connection", socket => {
 
     io.emit("correctGuess", {
       guesserId: socket.id,
-      guesserName: data.guesserName,
+      guesserName: data.name,
       points
     });
 
-    const totalGuessers = players.length - 1;
-
-    if (guessedPlayers.length >= totalGuessers) {
+    if (shouldEndRoundWithC()) {
       roundEnded = true;
       roundActive = false;
 
@@ -194,7 +360,7 @@ io.on("connection", socket => {
       });
 
       setTimeout(() => {
-        nextRound();
+        advanceRound();
       }, 1800);
     }
   });
@@ -213,7 +379,7 @@ io.on("connection", socket => {
     });
 
     setTimeout(() => {
-      nextRound();
+      advanceRound();
     }, 1800);
   });
 
