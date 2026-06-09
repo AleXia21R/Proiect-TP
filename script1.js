@@ -1,14 +1,5 @@
 const socket = io();
 
-const words = [
-  "pisica", "caine", "dragon", "robot", "pizza",
-  "masina", "castel", "fantoma", "telefon", "astronaut",
-  "broasca", "avion", "copac", "soare", "luna",
-  "munte", "peste", "coroana", "sarpe", "calculator",
-  "floare", "minge", "tren", "carte", "vulcan",
-  "urs", "iepure", "ochelari", "microfon", "racheta"
-];
-
 let allPlayers = [];
 let hostId = null;
 let myName = "";
@@ -46,13 +37,6 @@ const colors = [
 socket.on("connect", () => {
   myId = socket.id;
 });
-
-function normalize(text) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
 
 function showScreen(id) {
   document.querySelectorAll(".screen, #gameScreen").forEach(el => {
@@ -96,14 +80,17 @@ socket.on("playersUpdate", data => {
 
 function updateLobby() {
   const lobby = document.getElementById("lobbyPlayers");
+
   if (!lobby) return;
 
   lobby.innerHTML = "";
 
   allPlayers.forEach(player => {
     const div = document.createElement("div");
+
     div.className = "playerItem";
     div.innerHTML = `<b>${player.name}</b><br>Scor: ${player.score}`;
+
     lobby.appendChild(div);
   });
 
@@ -161,53 +148,63 @@ socket.on("gameStarted", settings => {
   currentRound = settings.currentRound;
   currentDrawerIndex = settings.currentDrawerIndex;
 
-  goToWordChoice();
+  showWaitingForWord();
 });
 
-function getRandomWords(count) {
-  const shuffled = [...words].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-function goToWordChoice() {
-  clearInterval(timerInterval);
-  hasGuessedCorrectly = false;
-
+function showWaitingForWord() {
   showScreen("wordChoiceScreen");
 
   const drawer = allPlayers[currentDrawerIndex];
 
   if (!drawer) return;
 
-  if (isDrawer()) {
-    document.getElementById("drawerChoiceText").textContent =
-      `${myName}, alege un cuvant:`;
+  document.getElementById("drawerChoiceText").textContent =
+    `Asteapta ca ${drawer.name} sa aleaga un cuvant...`;
 
-    const choices = getRandomWords(3);
-    const container = document.getElementById("wordChoices");
-    container.innerHTML = "";
-
-    choices.forEach(word => {
-      const btn = document.createElement("button");
-      btn.className = "wordButton";
-      btn.textContent = word;
-
-      btn.onclick = () => {
-        socket.emit("chooseWord", word);
-      };
-
-      container.appendChild(btn);
-    });
-  } else {
-    document.getElementById("drawerChoiceText").textContent =
-      `Asteapta ca ${drawer.name} sa aleaga un cuvant...`;
-
-    document.getElementById("wordChoices").innerHTML = "";
-  }
+  document.getElementById("wordChoices").innerHTML = "";
 }
 
-socket.on("wordChosen", data => {
+socket.on("waitingForWord", data => {
+  currentRound = data.currentRound;
+  currentDrawerIndex = data.currentDrawerIndex;
+
+  showScreen("wordChoiceScreen");
+
+  document.getElementById("drawerChoiceText").textContent =
+    `Asteapta ca ${data.drawerName} sa aleaga un cuvant...`;
+
+  document.getElementById("wordChoices").innerHTML = "";
+});
+
+socket.on("chooseWords", data => {
+  showScreen("wordChoiceScreen");
+
+  document.getElementById("drawerChoiceText").textContent =
+    `${myName}, alege un cuvant:`;
+
+  const container = document.getElementById("wordChoices");
+  container.innerHTML = "";
+
+  data.choices.forEach(word => {
+    const btn = document.createElement("button");
+
+    btn.className = "wordButton";
+    btn.textContent = word;
+
+    btn.onclick = () => {
+      currentWord = word;
+      socket.emit("chooseWord", word);
+    };
+
+    container.appendChild(btn);
+  });
+});
+
+socket.on("drawerWord", data => {
   currentWord = data.word;
+});
+
+socket.on("wordChosen", data => {
   currentRound = data.currentRound;
   currentDrawerIndex = data.currentDrawerIndex;
 
@@ -246,6 +243,10 @@ function startRound() {
 
     document.getElementById("timerText").textContent = timer;
 
+    if (isDrawer()) {
+      socket.emit("timerUpdate", timer);
+    }
+
     if (timer <= 10) {
       document.getElementById("timerText").style.color = "red";
     }
@@ -269,6 +270,7 @@ function updatePlayersPanel() {
 
   allPlayers.forEach((player, index) => {
     const item = document.createElement("div");
+
     item.className = "playerItem";
 
     if (index === currentDrawerIndex) {
@@ -373,17 +375,6 @@ function sendGuess() {
 
   if (guess === "") return;
 
-  if (normalize(guess) === normalize(currentWord)) {
-    hasGuessedCorrectly = true;
-
-    socket.emit("correctGuess", {
-      guesserName: myName
-    });
-
-    input.value = "";
-    return;
-  }
-
   socket.emit("guess", {
     name: myName,
     text: guess
@@ -397,6 +388,10 @@ socket.on("guess", data => {
 });
 
 socket.on("correctGuess", data => {
+  if (data.guesserId === myId) {
+    hasGuessedCorrectly = true;
+  }
+
   addChatMessage(
     `${data.guesserName} a ghicit corect! +${data.points} puncte`,
     true
@@ -413,8 +408,9 @@ socket.on("roundEnded", data => {
 socket.on("nextRound", data => {
   currentRound = data.currentRound;
   currentDrawerIndex = data.currentDrawerIndex;
+  allPlayers = data.players;
 
-  goToWordChoice();
+  showWaitingForWord();
 });
 
 socket.on("gameFinished", players => {
