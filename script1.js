@@ -12,9 +12,6 @@ let currentRound = 1;
 let currentDrawerIndex = 0;
 let currentWord = "";
 
-let timer = drawTime;
-let timerInterval = null;
-
 let brushSize = 8;
 let brushColor = "black";
 
@@ -211,6 +208,20 @@ socket.on("wordChosen", data => {
   startRound();
 });
 
+socket.on("timerUpdate", timeLeft => {
+  const timerText = document.getElementById("timerText");
+
+  if (!timerText) return;
+
+  timerText.textContent = timeLeft;
+
+  if (timeLeft <= 10) {
+    timerText.style.color = "red";
+  } else {
+    timerText.style.color = "#4b35c8";
+  }
+});
+
 function startRound() {
   showScreen("gameScreen");
 
@@ -231,34 +242,8 @@ function startRound() {
       `${drawer.name} deseneaza`;
   }
 
-  timer = drawTime;
-
-  document.getElementById("timerText").textContent = timer;
+  document.getElementById("timerText").textContent = drawTime;
   document.getElementById("timerText").style.color = "#4b35c8";
-
-  clearInterval(timerInterval);
-
-  timerInterval = setInterval(() => {
-    timer--;
-
-    document.getElementById("timerText").textContent = timer;
-
-    if (isDrawer()) {
-      socket.emit("timerUpdate", timer);
-    }
-
-    if (timer <= 10) {
-      document.getElementById("timerText").style.color = "red";
-    }
-
-    if (timer <= 0) {
-      if (isDrawer()) {
-        socket.emit("timeEnded");
-      }
-
-      clearInterval(timerInterval);
-    }
-  }, 1000);
 }
 
 function updatePlayersPanel() {
@@ -399,7 +384,6 @@ socket.on("correctGuess", data => {
 });
 
 socket.on("roundEnded", data => {
-  clearInterval(timerInterval);
   drawing = false;
 
   addChatMessage(`Runda s-a terminat! Cuvantul era: ${data.word}`, true);
