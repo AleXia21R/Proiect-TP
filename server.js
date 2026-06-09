@@ -22,7 +22,9 @@ let currentWord = "";
 let guessedPlayers = [];
 let roundActive = false;
 let roundEnded = false;
+
 let currentTimeLeft = 0;
+let roundTimer = null;
 
 function runC(args) {
   try {
@@ -54,7 +56,9 @@ function calculatePointsWithC(position, timeLeft) {
   const result = runC(["points", String(position), String(timeLeft)]);
   const points = Number(result);
 
-  if (isNaN(points)) return 20;
+  if (isNaN(points)) {
+    return 20;
+  }
 
   return points;
 }
@@ -63,7 +67,9 @@ function drawerBonusWithC() {
   const result = runC(["bonus"]);
   const bonus = Number(result);
 
-  if (isNaN(bonus)) return 30;
+  if (isNaN(bonus)) {
+    return 30;
+  }
 
   return bonus;
 }
@@ -99,11 +105,12 @@ function sortPlayersWithC() {
 
   const result = runC(["sort", input]);
 
-  if (!result) return players;
+  if (!result) {
+    return players;
+  }
 
-  const sorted = result.split(",").map(item => {
+  return result.split(",").map(item => {
     const [name, score] = item.split(":");
-
     const originalPlayer = players.find(player => player.name === name);
 
     return {
@@ -112,8 +119,6 @@ function sortPlayersWithC() {
       score: Number(score)
     };
   });
-
-  return sorted;
 }
 
 function saveScoresWithC() {
@@ -129,6 +134,8 @@ function getDrawer() {
 }
 
 function resetGame() {
+  clearInterval(roundTimer);
+
   currentRound = 1;
   currentDrawerIndex = 0;
   currentWord = "";
@@ -163,7 +170,40 @@ function sendWordsToDrawer() {
   });
 }
 
+function startServerTimer() {
+  clearInterval(roundTimer);
+
+  currentTimeLeft = drawTime;
+
+  io.emit("timerUpdate", currentTimeLeft);
+
+  roundTimer = setInterval(() => {
+    currentTimeLeft--;
+
+    io.emit("timerUpdate", currentTimeLeft);
+
+    if (currentTimeLeft <= 0) {
+      clearInterval(roundTimer);
+
+      if (!roundEnded) {
+        roundEnded = true;
+        roundActive = false;
+
+        io.emit("roundEnded", {
+          word: currentWord
+        });
+
+        setTimeout(() => {
+          advanceRound();
+        }, 1800);
+      }
+    }
+  }, 1000);
+}
+
 function advanceRound() {
+  clearInterval(roundTimer);
+
   if (players.length === 0) return;
 
   const oldDrawer = currentDrawerIndex;
@@ -234,7 +274,6 @@ io.on("connection", socket => {
 
     rounds = settings.rounds;
     drawTime = settings.drawTime;
-    currentTimeLeft = drawTime;
 
     resetGame();
 
@@ -266,7 +305,6 @@ io.on("connection", socket => {
     guessedPlayers = [];
     roundActive = true;
     roundEnded = false;
-    currentTimeLeft = drawTime;
 
     socket.emit("drawerWord", {
       word: currentWord
@@ -276,14 +314,8 @@ io.on("connection", socket => {
       currentRound,
       currentDrawerIndex
     });
-  });
 
-  socket.on("timerUpdate", timeLeft => {
-    const drawer = getDrawer();
-
-    if (!drawer || socket.id !== drawer.id) return;
-
-    currentTimeLeft = timeLeft;
+    startServerTimer();
   });
 
   socket.on("draw", data => {
@@ -352,6 +384,8 @@ io.on("connection", socket => {
     });
 
     if (shouldEndRoundWithC()) {
+      clearInterval(roundTimer);
+
       roundEnded = true;
       roundActive = false;
 
@@ -363,24 +397,6 @@ io.on("connection", socket => {
         advanceRound();
       }, 1800);
     }
-  });
-
-  socket.on("timeEnded", () => {
-    const drawer = getDrawer();
-
-    if (!drawer || socket.id !== drawer.id) return;
-    if (roundEnded) return;
-
-    roundEnded = true;
-    roundActive = false;
-
-    io.emit("roundEnded", {
-      word: currentWord
-    });
-
-    setTimeout(() => {
-      advanceRound();
-    }, 1800);
   });
 
   socket.on("disconnect", () => {
